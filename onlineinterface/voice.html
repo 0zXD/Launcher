@@ -194,21 +194,15 @@
 
                 const result = await response.text();
                 
-                const parts = result.split('|');
-                const textResult = parts[0] || 'No text detected';
-                const audioPath = parts[1];
+                // Since we're using temp files, we only get the text result
+                const textResult = result || 'No text detected';
                 
                 responseText.textContent = textResult;
                 
-                if (audioPath) {
-                    audioPlayer.innerHTML = `
-                        <audio controls style="width: 100%;">
-                            <source src="${audioPath}" type="audio/wav">
-                            Your browser does not support the audio element.
-                        </audio>
-                    `;
-                }
+                // No audio playback since files are temporary
+                audioPlayer.innerHTML = '<p>Audio files are processed temporarily and not saved for playback.</p>';
                 
+                // Check for "launch" command
                 if (textResult.toLowerCase().includes('launch')) {
                     await triggerLaunch();
                 }

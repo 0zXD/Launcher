@@ -24,15 +24,25 @@ func processAudioHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
-	voicesDir := "/home/WrenKain/Downloads/voices"
-	err = os.MkdirAll(voicesDir, 0755)
+	// Create a temporary directory in the onlineinterface folder
+	tempDirName := fmt.Sprintf("temp-audio-%d", time.Now().UnixNano())
+	tempDir := filepath.Join("onlineinterface", tempDirName)
+
+	err = os.MkdirAll(tempDir, 0755)
 	if err != nil {
-		http.Error(w, "Failed to create voices directory", http.StatusInternalServerError)
+		http.Error(w, "Failed to create temp directory", http.StatusInternalServerError)
 		return
 	}
 
+	// Ensure cleanup happens at the end
+	defer func() {
+		os.RemoveAll(tempDir)
+		fmt.Printf("Cleaned up temp directory: %s\n", tempDir)
+	}()
+
+	// Create a unique filename in the temp directory
 	filename := fmt.Sprintf("audio-%d.wav", time.Now().UnixNano())
-	audioPath := filepath.Join(voicesDir, filename)
+	audioPath := filepath.Join(tempDir, filename)
 
 	audioFile, err := os.Create(audioPath)
 	if err != nil {
@@ -47,6 +57,7 @@ func processAudioHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Process the audio file
 	cmd := exec.Command("go", "run", "justaserver.go", audioPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -58,9 +69,8 @@ func processAudioHandler(w http.ResponseWriter, r *http.Request) {
 	result := strings.TrimSpace(string(output))
 	fmt.Printf("justaserver.go output: %s\n", result)
 
-	webAudioPath := "/audio/" + filename
-	response := result + "|" + webAudioPath
-	fmt.Fprint(w, response)
+	// Return the text result
+	fmt.Fprint(w, result)
 }
 
 func pingHandler(w http.ResponseWriter, r *http.Request) {
@@ -77,25 +87,10 @@ func serveHTML(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, "onlineinterface/voice.html")
 }
 
-func serveAudio(w http.ResponseWriter, r *http.Request) {
-	filename := filepath.Base(r.URL.Path)
-	voicesDir := "/home/WrenKain/Downloads/voices"
-	audioPath := filepath.Join(voicesDir, filename)
-
-	if _, err := os.Stat(audioPath); os.IsNotExist(err) {
-		http.Error(w, "Audio file not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "audio/wav")
-	http.ServeFile(w, r, audioPath)
-}
-
 func main() {
 	http.HandleFunc("/", serveHTML)
 	http.HandleFunc("/process-audio", processAudioHandler)
 	http.HandleFunc("/ping", pingHandler)
-	http.HandleFunc("/audio/", serveAudio)
 
 	fmt.Println("Server is running on:")
 	fmt.Println("- HTTP:  http://localhost:8080")
@@ -136,15 +131,6 @@ func main() {
 	httpMux.HandleFunc("/ping", func(w http.ResponseWriter, r *http.Request) {
 		if r.Host == "localhost:8080" || r.Host == "127.0.0.1:8080" {
 			pingHandler(w, r)
-		} else {
-			httpsURL := "https://" + r.Host[:len(r.Host)-4] + "8443" + r.RequestURI
-			http.Redirect(w, r, httpsURL, http.StatusMovedPermanently)
-		}
-	})
-
-	httpMux.HandleFunc("/audio/", func(w http.ResponseWriter, r *http.Request) {
-		if r.Host == "localhost:8080" || r.Host == "127.0.0.1:8080" {
-			serveAudio(w, r)
 		} else {
 			httpsURL := "https://" + r.Host[:len(r.Host)-4] + "8443" + r.RequestURI
 			http.Redirect(w, r, httpsURL, http.StatusMovedPermanently)
