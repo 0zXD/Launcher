@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice Capture & Launch Detection</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 15px 30px;
+            margin: 10px;
+            font-size: 16px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        #start-recording {
+            background-color: #4CAF50;
+            color: white;
+        }
+        #start-recording:hover {
+            background-color: #45a049;
+        }
+        #stop-recording {
+            background-color: #f44336;
+            color: white;
+        }
+        #stop-recording:hover {
+            background-color: #da190b;
+        }
+        #stop-recording:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .recording {
+            color: #f44336;
+        }
+        .idle {
+            color: #666;
+        }
+        .response {
+            background-color: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 5px;
+            min-height: 50px;
+        }
+        .launch-detected {
+            background-color: #e8f5e8;
+            border-color: #4CAF50;
+            color: #2e7d32;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎤 Voice Capture & Launch Detection</h1>
+        
+        <div class="controls">
+            <button id="start-recording">Start Recording</button>
+            <button id="stop-recording" disabled>Stop Recording</button>
+        </div>
+        
+        <div id="status" class="status idle">Ready to record</div>
+        
+        <div class="response">
+            <h3>Speech-to-Text Result:</h3>
+            <div id="response-text">No audio processed yet</div>
+        </div>
+        
+        <div class="response">
+            <h3>Your Recording:</h3>
+            <div id="audio-player">No audio recorded yet</div>
+        </div>
+        
+        <div class="response">
+            <h3>Launch Detection:</h3>
+            <div id="launch-status">Waiting for "launch" command...</div>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        const startButton = document.getElementById('start-recording');
+        const stopButton = document.getElementById('stop-recording');
+        const statusDiv = document.getElementById('status');
+        const responseText = document.getElementById('response-text');
+        const launchStatus = document.getElementById('launch-status');
+        const audioPlayer = document.getElementById('audio-player');
+
+        async function requestMicrophoneAccess() {
+            try {
+                statusDiv.textContent = 'Requesting microphone access...';
+                statusDiv.className = 'status idle';
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                stream.getTracks().forEach(track => track.stop());
+                
+                statusDiv.textContent = 'Microphone access granted. Ready to record';
+                statusDiv.className = 'status idle';
+                
+            } catch (error) {
+                console.error('Microphone access denied:', error);
+                statusDiv.textContent = 'Microphone access denied. Please enable in browser settings.';
+                statusDiv.className = 'status idle';
+            }
+        }
+
+        window.addEventListener('load', requestMicrophoneAccess);
+
+        startButton.addEventListener('click', async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                mediaRecorder = new MediaRecorder(stream);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = event => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+                    await processAudio(audioBlob);
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                statusDiv.textContent = '🔴 Recording...';
+                statusDiv.className = 'status recording';
+
+            } catch (error) {
+                console.error('Error accessing microphone:', error);
+                responseText.textContent = 'Error: Could not access microphone';
+            }
+        });
+
+        stopButton.addEventListener('click', () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                statusDiv.textContent = 'Processing audio...';
+                statusDiv.className = 'status idle';
+            }
+        });
+
+        async function processAudio(audioBlob) {
+            try {
+                const formData = new FormData();
+                formData.append('audio', audioBlob, 'audio.wav');
+
+                responseText.textContent = 'Processing audio...';
+
+                const response = await fetch('/process-audio', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.text();
+                
+                const parts = result.split('|');
+                const textResult = parts[0] || 'No text detected';
+                const audioPath = parts[1];
+                
+                responseText.textContent = textResult;
+                
+                if (audioPath) {
+                    audioPlayer.innerHTML = `
+                        <audio controls style="width: 100%;">
+                            <source src="${audioPath}" type="audio/wav">
+                            Your browser does not support the audio element.
+                        </audio>
+                    `;
+                }
+                
+                if (textResult.toLowerCase().includes('launch')) {
+                    await triggerLaunch();
+                }
+
+                statusDiv.textContent = 'Ready to record';
+                statusDiv.className = 'status idle';
+
+            } catch (error) {
+                console.error('Error processing audio:', error);
+                responseText.textContent = 'Error processing audio: ' + error.message;
+                statusDiv.textContent = 'Error occurred';
+                statusDiv.className = 'status idle';
+            }
+        }
+
+        async function triggerLaunch() {
+            try {
+                const response = await fetch('/ping', { method: 'GET' });
+                const result = await response.text();
+                
+                launchStatus.textContent = '🚀 LAUNCH DETECTED! ' + result;
+                launchStatus.parentElement.className = 'response launch-detected';
+                
+                setTimeout(() => {
+                    launchStatus.textContent = 'Waiting for "launch" command...';
+                    launchStatus.parentElement.className = 'response';
+                }, 5000);
+
+            } catch (error) {
+                console.error('Error triggering launch:', error);
+                launchStatus.textContent = 'Error triggering launch ping';
+            }
+        }
+    </script>
+</body>
+</html>

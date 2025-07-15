@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Recorder</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            color: white;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        h1 {
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            font-weight: 300;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .button {
+            padding: 15px 30px;
+            font-size: 1.1em;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .record-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+            color: white;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+        }
+
+        .record-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+        }
+
+        .record-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .stop-btn {
+            background: linear-gradient(45deg, #54a0ff, #2e86de);
+            color: white;
+            box-shadow: 0 4px 15px rgba(84, 160, 255, 0.4);
+        }
+
+        .stop-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(84, 160, 255, 0.6);
+        }
+
+        .stop-btn:disabled {
+            background: #666;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .download-btn {
+            background: linear-gradient(45deg, #26de81, #20bf6b);
+            color: white;
+            box-shadow: 0 4px 15px rgba(38, 222, 129, 0.4);
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .download-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(38, 222, 129, 0.6);
+        }
+
+        .status {
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+
+        .status.recording {
+            background: rgba(255, 107, 107, 0.2);
+            border: 1px solid rgba(255, 107, 107, 0.5);
+        }
+
+        .status.ready {
+            background: rgba(38, 222, 129, 0.2);
+            border: 1px solid rgba(38, 222, 129, 0.5);
+        }
+
+        .status.stopped {
+            background: rgba(84, 160, 255, 0.2);
+            border: 1px solid rgba(84, 160, 255, 0.5);
+        }
+
+        .timer {
+            font-size: 1.5em;
+            font-weight: 600;
+            margin: 20px 0;
+            font-family: 'Courier New', monospace;
+        }
+
+        .audio-preview {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .audio-preview audio {
+            width: 100%;
+            border-radius: 10px;
+        }
+
+        .recording-indicator {
+            display: none;
+            font-size: 1.2em;
+            margin: 15px 0;
+        }
+
+        .recording-indicator.active {
+            display: block;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        .mic-icon {
+            font-size: 3em;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+
+        .error {
+            background: rgba(255, 107, 107, 0.2);
+            border: 1px solid rgba(255, 107, 107, 0.5);
+            color: #ff6b6b;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="mic-icon">🎤</div>
+        <h1>Audio Recorder</h1>
+        
+        <div class="error" id="errorMessage"></div>
+        
+        <div class="status" id="status">Click "Start Recording" to begin</div>
+        
+        <div class="recording-indicator" id="recordingIndicator">
+            🔴 Recording...
+        </div>
+        
+        <div class="timer" id="timer">00:00</div>
+        
+        <div class="controls">
+            <button class="button record-btn" id="recordBtn">Start Recording</button>
+            <button class="button stop-btn" id="stopBtn" disabled>Stop Recording</button>
+        </div>
+        
+        <div class="audio-preview" id="audioPreview">
+            <audio controls id="audioPlayer"></audio>
+            <br><br>
+            <a class="button download-btn" id="downloadBtn" download="recording.wav">Download Recording</a>
+        </div>
+    </div>
+
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let startTime;
+        let timerInterval;
+
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const status = document.getElementById('status');
+        const timer = document.getElementById('timer');
+        const audioPreview = document.getElementById('audioPreview');
+        const audioPlayer = document.getElementById('audioPlayer');
+        const downloadBtn = document.getElementById('downloadBtn');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+        const errorMessage = document.getElementById('errorMessage');
+
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showError('Your browser does not support audio recording.');
+        }
+
+        recordBtn.addEventListener('click', startRecording);
+        stopBtn.addEventListener('click', stopRecording);
+
+        async function startRecording() {
+            try {
+                hideError();
+                audioChunks = [];
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        sampleRate: 44100
+                    } 
+                });
+
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType: 'audio/webm;codecs=opus'
+                });
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        audioChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const audioBlob = new Blob(audioChunks, { 
+                        type: 'audio/webm;codecs=opus' 
+                    });
+                    
+                    const audioUrl = URL.createObjectURL(audioBlob);
+                    audioPlayer.src = audioUrl;
+                    
+                    downloadBtn.href = audioUrl;
+                    downloadBtn.download = `recording-${new Date().toISOString().slice(0, 19).replace(/:/g, '-')}.webm`;
+                    
+                    audioPreview.style.display = 'block';
+                    status.textContent = 'Recording completed! You can play it back or download it.';
+                    status.className = 'status stopped';
+                    
+                    stream.getTracks().forEach(track => track.stop());
+                };
+
+                mediaRecorder.start();
+                startTime = Date.now();
+                startTimer();
+
+                recordBtn.disabled = true;
+                stopBtn.disabled = false;
+                status.textContent = 'Recording in progress...';
+                status.className = 'status recording';
+                recordingIndicator.classList.add('active');
+                audioPreview.style.display = 'none';
+
+            } catch (error) {
+                console.error('Error starting recording:', error);
+                showError('Error accessing microphone. Please check your permissions and try again.');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                stopTimer();
+                
+                recordBtn.disabled = false;
+                stopBtn.disabled = true;
+                recordingIndicator.classList.remove('active');
+            }
+        }
+
+        function startTimer() {
+            timerInterval = setInterval(() => {
+                const elapsed = Date.now() - startTime;
+                const minutes = Math.floor(elapsed / 60000);
+                const seconds = Math.floor((elapsed % 60000) / 1000);
+                timer.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function stopTimer() {
+            clearInterval(timerInterval);
+        }
+
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorMessage.style.display = 'block';
+        }
+
+        function hideError() {
+            errorMessage.style.display = 'none';
+        }
+
+        status.className = 'status ready';
+    </script>
+</body>
+</html>
